@@ -11,4 +11,7 @@ set( CMAKE_BUILD_TYPE Debug)
 add_subdirectory( "${CMAKE_SOURCE_DIR}/Part1_Spring" 
   "${CMAKE_BINARY_DIR}/Part1_Spring-${CMAKE_BUILD_TYPE}" )
 
+# Part 2 : Cloth
+add_subdirectory( "${CMAKE_SOURCE_DIR}/Part2_Cloth" 
+  "${CMAKE_BINARY_DIR}/Part2_Cloth-${CMAKE_BUILD_TYPE}" )
 
