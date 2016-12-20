@@ -18,11 +18,7 @@
 #include <string>
 #include <sstream>
 
-
-
 using namespace cpe;
-
-
 
 static cpe::mesh build_ground(float const L,float const h);
 static cpe::mesh build_sphere(float radius,vec3 center);
@@ -33,7 +29,6 @@ void scene::load_scene()
     time_integration.restart();
     delta_t=0.02f;
 
-
     //*****************************************//
     // Preload default structure               //
     //*****************************************//
@@ -42,7 +37,6 @@ void scene::load_scene()
                                   "shader_mesh.frag");
     shader_sphere     = read_shader("shader_sphere.vert",
                                   "shader_sphere.frag");
-
 
     texture_ground = load_texture_file("wood_texture.png");
 
@@ -63,7 +57,6 @@ void scene::load_scene()
     //*****************************************//
     // Init spring
     //*****************************************//
-
     p0 = vec3(0.0f,0.0f,0.5f);
     p1 = vec3(0.0f,0.0f,0.4f);
     p2 = vec3(0.0f,0.0f,0.3f);
@@ -71,81 +64,78 @@ void scene::load_scene()
     v2 = vec3(1.0f,1.0f,3.0f);
     L10_rest = 0.1f;
     L21_rest = 0.1f;
-
-
 }
-
 
 
 void scene::draw_scene()
 {
+  //Setup shader
+  setup_shader_mesh(shader_mesh);
 
-    setup_shader_mesh(shader_mesh);
+  //Draw the ground
+  glBindTexture(GL_TEXTURE_2D,texture_ground);                                                       PRINT_OPENGL_ERROR();
+  mesh_ground_opengl.draw();
+  glBindTexture(GL_TEXTURE_2D,texture_default);                                                      PRINT_OPENGL_ERROR();
 
-    // draw the ground
-    glBindTexture(GL_TEXTURE_2D,texture_ground);                                                       PRINT_OPENGL_ERROR();
-    mesh_ground_opengl.draw();
-    glBindTexture(GL_TEXTURE_2D,texture_default);                                                      PRINT_OPENGL_ERROR();
-
-
-    static float const mu = 0.2f;
-    static float K = 20.0f;
-    static vec3 const g (0.0f,0.0f,-9.81f);
-    if( time_integration.elapsed() > 5 )
+  static float const mu = 0.3f;          //Coeff attenuation
+  static float K = 20.0f;                //Cte raideur
+  static vec3 const g (0.0f,0.0f,-9.81f);//Gravité
+  //Time integration
+  if( time_integration.elapsed() > 5 )
     {
-        vec3 const u1 = p1-p2;
-        float const L21 = norm(u1);
+    //Compute force F21
+    vec3 const u1 = p1-p2;
+    float const L21 = norm(u1);
+    vec3 const f21 = K * (L21-L21_rest) * u1/L21;
 
-        vec3 const f21 = K * (L21-L21_rest) * u1/L21;
+    //Compute new speed and position
+    v2 = (1-mu*delta_t)*v2 + delta_t*(f21+g/3.0f);
+    p2 =                p2 + delta_t*v2;
 
-        v2 = (1-mu*delta_t)*v2 + delta_t*(f21+g);
-        p2 =                p2 + delta_t*v2;
+    //Compute force F10
+    vec3 const u0 = p0-p1;
+    float const L10 = norm(u0);
+    vec3 const f10 = K * (L10-L10_rest) * u0/L10;
 
+    //Compute new speed and position
+    v1 = (1-mu*delta_t)*v1 + delta_t*(f10-f21+g/3.0f);
+    p1 =                p1 + delta_t*v1;
 
-        vec3 const u0 = p0-p1;
-        float const L10 = norm(u0);
-
-        vec3 const f10 = K * (L10-L10_rest) * u0/L10;
-
-        v1 = (1-mu*delta_t)*v1 + delta_t*(f10-f21+g);
-        p1 =                p1 + delta_t*v1;
-
-
-        time_integration.restart();
+    //Reset timer
+    time_integration.restart();
     }
 
+  setup_shader_mesh(shader_sphere);
+  //draw p0
+  glUniform3f(get_uni_loc(shader_sphere,"translation") , p0.x(),p0.y(),p0.z());
+  mesh_sphere_opengl.draw();
 
-    setup_shader_mesh(shader_sphere);
+  //draw p1
+  glUniform3f(get_uni_loc(shader_sphere,"translation") , p1.x(),p1.y(),p1.z());
+  mesh_sphere_opengl.draw();
 
-    //draw p0
-    glUniform3f(get_uni_loc(shader_sphere,"translation") , p0.x(),p0.y(),p0.z());
-    mesh_sphere_opengl.draw();
-
-    //draw p1
-    glUniform3f(get_uni_loc(shader_sphere,"translation") , p1.x(),p1.y(),p1.z());
-    mesh_sphere_opengl.draw();
-
-    //draw p2
-    glUniform3f(get_uni_loc(shader_sphere,"translation") , p2.x(),p2.y(),p2.z());
-    mesh_sphere_opengl.draw();
+  //draw p2
+  glUniform3f(get_uni_loc(shader_sphere,"translation") , p2.x(),p2.y(),p2.z());
+  mesh_sphere_opengl.draw();
 
 
-    // draw p0-p1
-    line_opengl line;
-    line.init();
-    glUseProgram(line.shader_id());
-    camera_matrices const& cam=pwidget->camera();
-    glUniformMatrix4fv(get_uni_loc(line.shader_id(),"camera_modelview"),1,false,cam.modelview.pointer());     PRINT_OPENGL_ERROR();
-    glUniformMatrix4fv(get_uni_loc(line.shader_id(),"camera_projection"),1,false,cam.projection.pointer());   PRINT_OPENGL_ERROR();
-    line.draw(p0,p1);
-    // draw p1-p2
-    line_opengl line2;
-    line2.init();
-    glUseProgram(line2.shader_id());
-    //camera_matrices const& cam=pwidget->camera();
-    glUniformMatrix4fv(get_uni_loc(line2.shader_id(),"camera_modelview"),1,false,cam.modelview.pointer());     PRINT_OPENGL_ERROR();
-    glUniformMatrix4fv(get_uni_loc(line2.shader_id(),"camera_projection"),1,false,cam.projection.pointer());   PRINT_OPENGL_ERROR();
-    line2.draw(p1,p2);
+  // draw p0-p1
+  line_opengl line;
+  line.init();
+  glUseProgram(line.shader_id());
+  camera_matrices const& cam=pwidget->camera();
+  glUniformMatrix4fv(get_uni_loc(line.shader_id(),"camera_modelview"),1,false,cam.modelview.pointer());     PRINT_OPENGL_ERROR();
+  glUniformMatrix4fv(get_uni_loc(line.shader_id(),"camera_projection"),1,false,cam.projection.pointer());   PRINT_OPENGL_ERROR();
+  line.draw(p0,p1);
+
+  // draw p1-p2
+  line_opengl line2;
+  line2.init();
+  glUseProgram(line2.shader_id());
+  //camera_matrices const& cam=pwidget->camera();
+  glUniformMatrix4fv(get_uni_loc(line2.shader_id(),"camera_modelview"),1,false,cam.modelview.pointer());     PRINT_OPENGL_ERROR();
+  glUniformMatrix4fv(get_uni_loc(line2.shader_id(),"camera_projection"),1,false,cam.projection.pointer());   PRINT_OPENGL_ERROR();
+  line2.draw(p1,p2);
 
 }
 
@@ -181,10 +171,12 @@ GLuint scene::load_texture_file(std::string const& filename)
     return pwidget->load_texture_file(data_dir + filename);
 }
 
+
 void scene::set_widget(myWidgetGL* widget_param)
 {
     pwidget=widget_param;
 }
+
 
 static cpe::mesh build_ground(float const L,float const h)
 {
@@ -202,9 +194,9 @@ static cpe::mesh build_ground(float const L,float const h)
     m.add_triangle_index({0,2,1});
     m.add_triangle_index({0,3,2});
 
-
     return m;
 }
+
 
 static cpe::mesh build_sphere(float radius,vec3 center)
 {
@@ -214,4 +206,3 @@ static cpe::mesh build_sphere(float radius,vec3 center)
     m.transform_apply_translation(center);
     return m;
 }
-

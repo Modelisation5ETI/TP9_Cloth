@@ -40,6 +40,8 @@ public:
     vec3& force(int ku,int kv);
 
     void update_force();
+    void map_neighbor( const vec2& d1, const vec2& d2, const vec2& d3, const vec2& d4,
+      const float& K, const float& L_rest );
     void compute_neighbor_force( const vec2& vertex_ij, std::vector<vec2> neighbors_ij, const float K, const float L_rest  );
     void integration_step(float dt);
 

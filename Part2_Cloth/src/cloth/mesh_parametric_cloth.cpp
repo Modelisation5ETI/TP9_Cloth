@@ -24,6 +24,41 @@
 namespace cpe
 {
 
+void mesh_parametric_cloth::map_neighbor( const vec2& d1, const vec2& d2, const vec2& d3, const vec2& d4, const float& K, const float& L_rest )
+{
+  int const Nu = size_u();
+  int const Nv = size_v();
+  for(int ku=0 ; ku<Nu ; ++ku)
+    {
+    for(int kv=0 ; kv<Nv ; ++kv)
+      {
+      //Setup current neighborhood
+      std::vector<vec2> neighbors;
+      if( ku + d1.x() >= 0 && ku + d1.x() < Nu &&
+          kv + d1.y() >= 0 && kv + d1.y() < Nv )
+        {
+        neighbors.push_back( vec2(ku,kv)+d1 );
+        }
+      if( ku + d2.x() >= 0 && ku + d2.x() < Nu &&
+          kv + d2.y() >= 0 && kv + d2.y() < Nv )
+        {
+        neighbors.push_back( vec2(ku,kv)+d2 );
+        }
+      if( ku + d3.x() >= 0 && ku + d3.x() < Nu &&
+          kv + d3.y() >= 0 && kv + d3.y() < Nv )
+        {
+        neighbors.push_back( vec2(ku,kv)+d3 );
+        }
+      if( ku + d4.x() >= 0 && ku + d4.x() < Nu &&
+          kv + d4.y() >= 0 && kv + d4.y() < Nv )
+        {
+        neighbors.push_back( vec2(ku,kv)+d4 );
+        }
+      //Compute neighborhood forces
+      compute_neighbor_force( vec2(ku,kv), neighbors, K, L_rest );
+      }
+    }
+}
 
 void mesh_parametric_cloth::compute_neighbor_force( const vec2& vertex_ij, std::vector<vec2> neighbors_ij, const float K, const float L_rest )
 {
@@ -36,142 +71,100 @@ void mesh_parametric_cloth::compute_neighbor_force( const vec2& vertex_ij, std::
 
 void mesh_parametric_cloth::update_force()
 {
+  int const Nu = size_u();
+  int const Nv = size_v();
+  int const N_total = Nu*Nv;
+  ASSERT_CPE(static_cast<int>(force_data.size()) == Nu*Nv , "Error of size");
 
-    int const Nu = size_u();
-    int const Nv = size_v();
-    int const N_total = Nu*Nv;
-    ASSERT_CPE(static_cast<int>(force_data.size()) == Nu*Nv , "Error of size");
+  // Gravity
+  static vec3 const g (0.0f,0.0f,-9.81f);
+  vec3 const g_normalized = g/N_total;
 
+  // Wind
+  vec3 windDirection( -1.5, 1, 0 );
+  vec3 windDirection_normalized = windDirection/N_total;
+  float windIntensity = 10.0f;
 
-    //Gravity
-    static vec3 const g (0.0f,0.0f,-9.81f);
-    vec3 const g_normalized = g/N_total;
-    for(int ku=0 ; ku<Nu ; ++ku)
+  // Apply forces
+  for(int ku=0 ; ku<Nu ; ++ku)
     {
-        for(int kv=0 ; kv<Nv ; ++kv)
-        {
-            force(ku,kv) = g_normalized;
-        }
+    for(int kv=0 ; kv<Nv ; ++kv)
+      {
+      force(ku,kv) = g_normalized;
+      force(ku,kv) += windIntensity * dot( normal(ku,kv), windDirection_normalized ) * normal(ku,kv);
+      }
     }
 
-    //*************************************************************//
-    // TO DO, Calculer les forces s'appliquant sur chaque sommet
-    //*************************************************************//
+  //*************************************************************//
+  // Compute spring neighbor forces
+  //*************************************************************//
+  // Structural
+  map_neighbor( vec2(-1,0), vec2(0,-1), vec2(1,0), vec2(0,1), 30.0f, 1.0f/Nu );
 
-    //
-    static float K = 20.0f;
-    const float L_rest = 1.0f/Nu; //WARNING sqrt(2)/2 pour shearing et 2.0/Nu pour bending
-    vec3 u;
+  // Shear
+  map_neighbor( vec2(-1,-1), vec2(1,-1), vec2(1,1), vec2(-1,1), 2.0f, sqrt(2)/(2*Nu) );
 
-    for(int ku=1 ; ku<Nu-1 ; ++ku)
-    {
-        for(int kv=1 ; kv<Nv-1 ; ++kv)
-          {
-          compute_neighbor_force(
-            vec2(ku,kv),
-            {vec2(ku+1,kv), vec2(ku - 1,kv), vec2(ku,kv + 1), vec2(ku,kv - 1)},
-            K, L_rest);
-          }
-    }
+  // Bending
+  map_neighbor( vec2(-2,0), vec2(0,-2), vec2(2,0), vec2(0,2), 25.0f, 2.0f/Nu );
 
-
-    for(int kv=1 ; kv<Nv-1 ; ++kv)
-      {
-        compute_neighbor_force(vec2(0,kv),{vec2(1,kv),vec2(0,kv+1),vec2(0,kv-1)}, K, L_rest);
-
-
-        compute_neighbor_force(vec2(Nu-1,kv),{vec2(Nu-2,kv),vec2(Nu-1,kv+1),vec2(Nu-1,kv-1)}, K, L_rest);
-
-      }
-
-    for(int ku=1 ; ku<Nu-1 ; ++ku)
-      {
-      compute_neighbor_force(vec2(ku,0),{vec2(ku,1),vec2(ku + 1,0),vec2(ku - 1,0)}, K, L_rest);
-
-
-      compute_neighbor_force(vec2(ku,Nv-1),{vec2(ku,Nv-2),vec2(ku+1,Nv-1),vec2(ku-1,Nv-1)}, K, L_rest);
-
-
-      }
-
-    // Corners
-    u = vertex(Nu-1, 0) - vertex(Nu-1, 1);
-    force(Nu-1, 0) -= K * (norm(u)-L_rest) * u/norm(u);
-    u = vertex(Nu-1, 0) - vertex(Nu-2, 0);
-    force(Nu-1, 0) -= K * (norm(u)-L_rest) * u/norm(u);
-//    force(Nu-1, 0) = force(Nu-1, 0)/2.0f;
-
-    u = vertex(Nu-1,Nv-1) - vertex(Nu-2, Nv-1 );
-    force(Nu-1,Nv-1) -= K * (norm(u)-L_rest) * u/norm(u);
-    u = vertex(Nu-1,Nv-1) - vertex(Nu-1, Nv-2);
-    force(Nu-1,Nv-1) -= K * (norm(u)-L_rest) * u/norm(u);
-//    force(Nu-1,Nv-1) = force(Nu-1,Nv-1)/2.0f;
-
-    u = vertex(0, 0) - vertex(1, 0);
-    force(0, 0) -= K * (norm(u)-L_rest) * u/norm(u);
-    u = vertex(0, 0) - vertex(0, 1);
-    force(0, 0) -= K * (norm(u)-L_rest) * u/norm(u);
-//    force(0, 0) = force(0, 0)/2.0f;
-
-    u = vertex(0,Nv-1) - vertex(0, Nv-2);
-    force(0,Nv-1) -= K * (norm(u)-L_rest) * u/norm(u);
-    u = vertex(0,Nv-1) - vertex(1, Nv-1);
-    force(0,Nv-1) -= K * (norm(u)-L_rest) * u/norm(u);
-//    force(0,Nv-1) = force(0,Nv-1)/2.0f;
-
-
-
-    // Point fixes
-    force( 0, 0 ) = vec3( 0, 0, 0 );
-    force( 0, Nv-1 ) = vec3( 0, 0, 0 );
-
-
-
-
-
-    //*************************************************************//
-
-
+  // Static Points
+  force( 0, 0 ) = vec3( 0, 0, 0 );
+  force( 0, Nv-1 ) = vec3( 0, 0, 0 );
 }
 
 void mesh_parametric_cloth::integration_step(float const dt)
 {
-    ASSERT_CPE(speed_data.size() == force_data.size(),"Incorrect size");
-    ASSERT_CPE(static_cast<int>(speed_data.size()) == size_vertex(),"Incorrect size");
+  ASSERT_CPE(speed_data.size() == force_data.size(),"Incorrect size");
+  ASSERT_CPE(static_cast<int>(speed_data.size()) == size_vertex(),"Incorrect size");
 
-
-    int const Nu = size_u();
-    int const Nv = size_v();
-    //*************************************************************//
-    // TO DO: Calculer l'integration numerique des positions au cours de l'intervalle de temps dt.
-    //*************************************************************//
-    static float const mu = 0.2f;
-    for( int i = 0; i < Nu; i++ )
+  int const Nu = size_u();
+  int const Nv = size_v();
+  //*************************************************************//
+  // Numerical integration of positions and speeds along time
+  //*************************************************************//
+  static float const mu = 0.2f; //Damping coefficient
+  for( int i = 0; i < Nu; i++ )
+    {
+    for( int j = 0; j < Nv; j++ )
       {
-      for( int j = 0; j < Nv; j++ )
+      //Euler explicit step
+      speed(i,j) = (1-mu*dt)*speed(i,j)  + dt * force(i,j) ;
+      vertex(i,j) = vertex(i,j) + dt * speed(i,j);
+
+      //Collision with ground : WARNING: Hardcoded plane position
+      if( vertex(i,j).z() < -1.101f +0.01f )
         {
-        speed(i,j) = (1-mu*dt)*speed(i,j)  + dt * force(i,j) ;
-        vertex(i,j) = vertex(i,j) + dt * speed(i,j);
+        vertex(i,j).z() = -1.10f;
+        speed(i,j).z() = -1.1f;
+        }
+
+      //Collision with sphere
+      vec3 sphereCenter(0.4f,0.5f,-0.8f);
+      float radius = 0.198f;
+      vec3 normal = vertex(i,j)-sphereCenter;
+      if( norm( normal ) < radius + 0.01 )
+        {
+        normal = normalized( normal );
+        vertex(i,j) = sphereCenter + (radius + 0.01) * normal;
+        //Set speed to 0 along normal
+        speed(i,j) -= dot( normal, speed(i,j) ) * normal;
         }
       }
+    }
 
-
-    //*************************************************************//
-
-
-    //security check (throw exception if divergence is detected)
-    static float const LIMIT=30.0f;
-    for(int ku=0 ; ku<Nu ; ++ku)
+  //security check (throw exception if divergence is detected)
+  static float const LIMIT=30.0f;
+  for(int ku=0 ; ku<Nu ; ++ku)
     {
-        for(int kv=0 ; kv<Nv ; ++kv)
-        {
-            vec3 const& p = vertex(ku,kv);
+    for(int kv=0 ; kv<Nv ; ++kv)
+      {
+      vec3 const& p = vertex(ku,kv);
 
-            if( norm(p) > LIMIT )
-            {
-                throw exception_divergence("Divergence of the system",EXCEPTION_PARAMETERS_CPE);
-            }
+      if( norm(p) > LIMIT )
+        {
+        throw exception_divergence("Divergence of the system",EXCEPTION_PARAMETERS_CPE);
         }
+      }
     }
 
 }

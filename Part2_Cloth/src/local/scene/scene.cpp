@@ -21,8 +21,6 @@
 
 using namespace cpe;
 
-
-
 static cpe::mesh build_ground(float const L,float const h);
 static cpe::mesh build_sphere(float radius,vec3 center);
 
@@ -53,7 +51,7 @@ void scene::load_scene()
     //*****************************************//
     // Sphere
     //*****************************************//
-    mesh_sphere = build_sphere(0.198f , {0.5f,0.05f,-1.1f});
+    mesh_sphere = build_sphere(0.198f , {0.4f,0.5f,-0.8f});
     mesh_sphere.fill_empty_field_by_default();
     mesh_sphere_opengl.fill_vbo(mesh_sphere);
 
@@ -63,58 +61,50 @@ void scene::load_scene()
     mesh_cloth.set_plane_xy_unit(30,30);
     mesh_cloth.fill_empty_field_by_default();
     mesh_cloth_opengl.fill_vbo(mesh_cloth);
-
-
 }
-
-
 
 void scene::draw_scene()
 {
-
     setup_shader_mesh(shader_mesh);
 
-    // draw the ground
+    //Draw the ground
     glBindTexture(GL_TEXTURE_2D,texture_ground);                                                       PRINT_OPENGL_ERROR();
     mesh_ground_opengl.draw();
-    // draw the sphere
+    //Draw the sphere
     glBindTexture(GL_TEXTURE_2D,texture_default);                                                      PRINT_OPENGL_ERROR();
     mesh_sphere_opengl.draw();
 
-
-    //try numerical integration (stop computation if divergence)
+    //Try numerical integration (stop computation if divergence)
     try
-    {
-        if(divergence==false && time_integration.elapsed() > 5)
+      {
+      if(divergence==false && time_integration.elapsed() > 5)
         {
-            // compute-force / time integration
-            mesh_cloth.update_force();
-            mesh_cloth.integration_step(delta_t);
+        // compute-force / time integration
+        mesh_cloth.update_force();
+        mesh_cloth.integration_step( delta_t );
 
-            // re-compute normals
-            mesh_cloth.fill_normal();
+        // re-compute normals
+        mesh_cloth.fill_normal();
 
-            // update opengl container
-            mesh_cloth_opengl.update_vbo_vertex(mesh_cloth);
-            mesh_cloth_opengl.update_vbo_normal(mesh_cloth);
+        // update opengl container
+        mesh_cloth_opengl.update_vbo_vertex(mesh_cloth);
+        mesh_cloth_opengl.update_vbo_normal(mesh_cloth);
 
-            time_integration.restart();
+        time_integration.restart();
         }
-    }
+      }
     catch(exception_divergence const& e)
-    {
-        if(divergence==false)
+      {
+      if(divergence==false)
         {
-            std::cout<<"\n\nDivergence, time integration stoped"<<std::endl;
-            divergence = true;
+        std::cout<<"\n\nDivergence, time integration stoped"<<std::endl;
+        divergence = true;
         }
-    }
+      }
 
     //draw the cloth
     glBindTexture(GL_TEXTURE_2D,texture_cloth);                                                       PRINT_OPENGL_ERROR();
     mesh_cloth_opengl.draw();
-
-
 }
 
 
@@ -133,7 +123,6 @@ void scene::setup_shader_mesh(GLuint const shader_id)
 
     //load white texture
     glBindTexture(GL_TEXTURE_2D,texture_default);                                                      PRINT_OPENGL_ERROR();
-
 }
 
 
